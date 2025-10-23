@@ -1,4 +1,3 @@
-"""Core processing logic for downloading and saving articles."""
 from datetime import date
 from pathlib import Path
 from email.utils import parsedate_to_datetime
@@ -14,23 +13,9 @@ from scraper import download_html, extract_article_text
 
 def run_job(*, feed: str, out_root: str | Path, target_date: date, max_items: int | None,
             overwrite: bool):
-    """
-    Main processing function to download and save articles from RSS feed.
-    
-    Args:
-        feed: RSS feed URL or local file path
-        out_root: Output directory root path
-        target_date: Date to filter articles (IST timezone)
-        max_items: Maximum number of items to process (optional)
-        overwrite: Whether to overwrite existing files
-    
-    Returns:
-        Dictionary with processing results
-    """
     out_root = Path(out_root)
     out_root.mkdir(parents=True, exist_ok=True)
 
-    # Load and filter feed entries
     d = load_feed(feed)
     entries = []
     for e in d.entries:
@@ -51,12 +36,10 @@ def run_job(*, feed: str, out_root: str | Path, target_date: date, max_items: in
     if max_items:
         entries = entries[:max_items]
 
-    # Create output directory structure
     y, m, dday = f"{target_date.year:04d}", f"{target_date.month:02d}", f"{target_date.day:02d}"
     day_dir = out_root / y / m / dday
     day_dir.mkdir(parents=True, exist_ok=True)
 
-    # Setup session
     session = requests.Session()
     session.headers.update({"User-Agent": UA, "Accept": "*/*"})
 
@@ -69,7 +52,6 @@ def run_job(*, feed: str, out_root: str | Path, target_date: date, max_items: in
     if not entries:
         return results
 
-    # Process each entry
     for pub_ist, e in entries:
         title = e.title.strip()
         link = e.link.strip()
@@ -84,7 +66,6 @@ def run_job(*, feed: str, out_root: str | Path, target_date: date, max_items: in
             "errors": []
         }
 
-        # Download HTML
         html_path = day_dir / f"{slug}.html"
         raw_html = ""
         try:
@@ -96,7 +77,6 @@ def run_job(*, feed: str, out_root: str | Path, target_date: date, max_items: in
         except Exception as ex:
             record["errors"].append(f"HTML download failed: {ex}")
 
-        # Extract and save article text
         extracted_text = ""
         if raw_html:
             try:
@@ -109,7 +89,6 @@ def run_job(*, feed: str, out_root: str | Path, target_date: date, max_items: in
             except Exception as ex:
                 record["errors"].append(f"Extraction failed: {ex}")
 
-        # Download image
         img_url = pick_image(e)
         if img_url:
             try:
@@ -128,7 +107,6 @@ def run_job(*, feed: str, out_root: str | Path, target_date: date, max_items: in
             except Exception as ex:
                 record["errors"].append(f"Image download failed: {ex}")
 
-        # Create caption with summary
         raw = strip_html(getattr(e, "summary", getattr(e, "description", "")))
         summary_text = (raw[:900] + "…") if len(raw) > 900 else raw
 

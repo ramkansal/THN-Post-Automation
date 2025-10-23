@@ -1,5 +1,3 @@
-"""HTML templates for Flask web interface."""
-
 INDEX_TEMPLATE = """
 <!doctype html>
 <html lang="en">

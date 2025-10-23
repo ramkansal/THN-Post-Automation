@@ -1,10 +1,8 @@
-"""Feed parsing and image extraction utilities."""
 import os
 import feedparser
 
 
 def load_feed(feed_source: str):
-    """Load RSS feed from URL or local file."""
     if os.path.exists(feed_source):
         with open(feed_source, "rb") as f:
             data = f.read()
@@ -13,7 +11,6 @@ def load_feed(feed_source: str):
 
 
 def pick_image(entry) -> str | None:
-    """Extract image URL from feed entry."""
     if getattr(entry, "enclosures", None):
         for enc in entry.enclosures:
             if "type" in enc and isinstance(enc["type"], str) and enc["type"].startswith("image/"):

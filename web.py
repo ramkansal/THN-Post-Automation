@@ -1,4 +1,3 @@
-"""Flask web application for THN Post Kit."""
 from datetime import datetime
 from pathlib import Path
 
@@ -9,17 +8,14 @@ from processor import run_job
 from templates import INDEX_TEMPLATE, RESULTS_TEMPLATE, BROWSER_TEMPLATE
 
 
-# Initialize Flask app
 app = Flask(__name__)
 app.secret_key = FLASK_SECRET
 
-# Setup output directory
 BASE_OUT = Path(DEFAULT_OUT).resolve()
 BASE_OUT.mkdir(parents=True, exist_ok=True)
 
 
 def _safe_path(rel_path: str) -> Path:
-    """Validate and resolve path to prevent directory traversal attacks."""
     p = (BASE_OUT / rel_path).resolve()
     if not str(p).startswith(str(BASE_OUT)):
         raise ValueError("Path escape blocked")
@@ -28,7 +24,6 @@ def _safe_path(rel_path: str) -> Path:
 
 @app.route("/", methods=["GET"])
 def index():
-    """Render main form page."""
     today = datetime.now(IST).date().isoformat()
     return render_template_string(
         INDEX_TEMPLATE,
@@ -41,7 +36,6 @@ def index():
 
 @app.route("/run", methods=["POST"])
 def run():
-    """Process form submission and run the job."""
     feed = request.form.get("feed", DEFAULT_FEED).strip()
     out_root = request.form.get("out_root", str(BASE_OUT)).strip()
     date_str = request.form.get("date")
@@ -82,7 +76,6 @@ def run():
 
 @app.route("/o/")
 def browse_root():
-    """Browse root output directory."""
     entries = []
     for p in sorted(BASE_OUT.iterdir()):
         href = url_for("browse_dir", relpath=p.name) if p.is_dir() else url_for("serve_file", relpath=p.name)
@@ -92,7 +85,6 @@ def browse_root():
 
 @app.route("/o/<path:relpath>")
 def browse_dir(relpath):
-    """Browse subdirectories."""
     try:
         p = _safe_path(relpath)
     except Exception:
@@ -114,7 +106,6 @@ def browse_dir(relpath):
 
 @app.route("/files/<path:relpath>")
 def serve_file(relpath):
-    """Serve downloaded files."""
     try:
         p = _safe_path(relpath)
     except Exception:
@@ -126,5 +117,4 @@ def serve_file(relpath):
 
 @app.context_processor
 def inject_urls():
-    """Inject utility functions into templates."""
     return {"serve_file": serve_file}
