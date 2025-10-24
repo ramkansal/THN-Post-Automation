@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from config import PORT
 from web import app
 
