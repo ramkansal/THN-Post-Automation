@@ -94,7 +94,95 @@ def browse_dir(relpath):
 
     if p.is_file():
         return redirect(url_for("serve_file", relpath=relpath))
+    
+    # Detect if this looks like a "day" directory containing article files (txt/md/html/image by slug)
+    files = [c for c in p.iterdir() if c.is_file()]
+    has_article_texts = any(c.suffix.lower() in (".txt", ".md") for c in files)
 
+    if has_article_texts:
+        # Group by slug (stem without extension, ignoring '-1' style duplicates by keeping exact stem)
+        by_slug = {}
+        for f in files:
+            stem = f.stem
+            by_slug.setdefault(stem, []).append(f)
+
+        items = []
+        for slug, fpaths in sorted(by_slug.items()):
+            # Build paths map
+            paths = {}
+            title = slug
+            link = ""
+
+            # Prefer .txt to derive title/link; fallback to .md
+            txt_file = next((fp for fp in fpaths if fp.suffix.lower() == ".txt"), None)
+            md_file = next((fp for fp in fpaths if fp.suffix.lower() == ".md"), None)
+            html_file = next((fp for fp in fpaths if fp.suffix.lower() == ".html"), None)
+            img_file = next((fp for fp in fpaths if fp.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp")), None)
+
+            def relstr(fp):
+                try:
+                    return str(fp.relative_to(BASE_OUT))
+                except Exception:
+                    return str(fp)
+
+            if html_file:
+                paths["html"] = relstr(html_file)
+            if md_file:
+                paths["md"] = relstr(md_file)
+            if txt_file:
+                paths["txt"] = relstr(txt_file)
+            if img_file:
+                paths["image"] = relstr(img_file)
+
+            # Parse caption to extract title and link
+            src = txt_file or md_file
+            if src and src.exists():
+                try:
+                    content = src.read_text(encoding="utf-8", errors="ignore")
+                    # Title: first non-empty line
+                    for line in content.splitlines():
+                        if line.strip():
+                            title = line.strip()
+                            break
+                    # Link: first line that looks like a URL
+                    for line in content.splitlines():
+                        ls = line.strip()
+                        if ls.startswith("http://") or ls.startswith("https://"):
+                            link = ls
+                            break
+                except Exception:
+                    pass
+
+            items.append({
+                "title": title,
+                "link": link,
+                "slug": slug,
+                "paths": paths,
+                "image_saved": img_file is not None,
+                "errors": [],
+            })
+
+        # Try to detect target date from path (…/YYYY/MM/DD)
+        try:
+            relp = p.relative_to(BASE_OUT)
+            parts = relp.parts
+            target_label = str(p)
+            if len(parts) >= 3 and all(part.isdigit() for part in parts[-3:]):
+                y, m, d = parts[-3:]
+                target_label = f"{y}-{m}-{d}"
+        except Exception:
+            target_label = str(p.name)
+
+        return render_template_string(
+            RESULTS_TEMPLATE,
+            title=APP_TITLE,
+            target_date=target_label,
+            root=str(p),
+            items=items,
+            count=len(items),
+        )
+
+    # Default: show standard browser grid for non-article directories
     entries = []
     for c in sorted(p.iterdir()):
         sub = f"{relpath}/{c.name}"
