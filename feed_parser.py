@@ -1,5 +1,12 @@
 import os
 import feedparser
+from urllib.parse import urlparse
+
+from config import DEFAULT_FEED, RATE_LIMIT_FEED_CALLS, RATE_LIMIT_WINDOW_SEC, ALLOW_ONLY_DEFAULT_FEED
+from utils import RateLimiter
+
+
+_limiter = RateLimiter(RATE_LIMIT_FEED_CALLS, RATE_LIMIT_WINDOW_SEC)
 
 
 def load_feed(feed_source: str):
@@ -7,6 +14,21 @@ def load_feed(feed_source: str):
         with open(feed_source, "rb") as f:
             data = f.read()
         return feedparser.parse(data)
+
+    try:
+        parsed = urlparse(feed_source)
+        is_url = parsed.scheme in ("http", "https")
+    except Exception:
+        is_url = False
+
+    if is_url:
+        if ALLOW_ONLY_DEFAULT_FEED and feed_source != DEFAULT_FEED:
+            raise ValueError("External feeds are not allowed. Use the default RSS feed only.")
+
+        key = DEFAULT_FEED if ALLOW_ONLY_DEFAULT_FEED else feed_source
+        if not _limiter.allow(key):
+            raise RuntimeError("Rate limit exceeded for RSS fetches. Please try again later.")
+
     return feedparser.parse(feed_source)
 
 
