@@ -1,12 +1,11 @@
 from datetime import datetime
 from pathlib import Path
 
-from flask import Flask, request, redirect, url_for, render_template_string, send_from_directory, abort, flash
+from flask import Flask, request, redirect, url_for, render_template_string, send_from_directory, abort, flash, session
 
 from config import APP_TITLE, DEFAULT_FEED, DEFAULT_OUT, FLASK_SECRET, IST
 from processor import run_job
 from templates import INDEX_TEMPLATE, RESULTS_TEMPLATE, BROWSER_TEMPLATE
-
 
 app = Flask(__name__)
 app.secret_key = FLASK_SECRET
@@ -14,28 +13,33 @@ app.secret_key = FLASK_SECRET
 BASE_OUT = Path(DEFAULT_OUT).resolve()
 BASE_OUT.mkdir(parents=True, exist_ok=True)
 
-
 def _safe_path(rel_path: str) -> Path:
     p = (BASE_OUT / rel_path).resolve()
     if not str(p).startswith(str(BASE_OUT)):
         raise ValueError("Path escape blocked")
     return p
 
-
 @app.route("/", methods=["GET"])
 def index():
     today = datetime.now(IST).date().isoformat()
+    import secrets
+    session['csrf_token'] = secrets.token_urlsafe(16)
     return render_template_string(
         INDEX_TEMPLATE,
         title=APP_TITLE,
         feed=DEFAULT_FEED,
         out_root=str(BASE_OUT),
         today=today,
+        csrf_token=session['csrf_token'],
     )
-
 
 @app.route("/run", methods=["POST"])
 def run():
+    token_form = request.form.get("csrf_token")
+    token_sess = session.get("csrf_token")
+    if not token_form or not token_sess or token_form != token_sess:
+        flash("Invalid or missing CSRF token.")
+        return redirect(url_for("index"))
     feed = request.form.get("feed", DEFAULT_FEED).strip()
     out_root = request.form.get("out_root", str(BASE_OUT)).strip()
     date_str = request.form.get("date")
@@ -73,7 +77,6 @@ def run():
         count=res["count"],
     )
 
-
 @app.route("/o/")
 def browse_root():
     entries = []
@@ -81,7 +84,6 @@ def browse_root():
         href = url_for("browse_dir", relpath=p.name) if p.is_dir() else url_for("serve_file", relpath=p.name)
         entries.append({"name": p.name, "type": "dir" if p.is_dir() else "file", "href": href})
     return render_template_string(BROWSER_TEMPLATE, title=APP_TITLE, root=str(BASE_OUT), entries=entries)
-
 
 @app.route("/o/<path:relpath>")
 def browse_dir(relpath):
@@ -95,12 +97,10 @@ def browse_dir(relpath):
     if p.is_file():
         return redirect(url_for("serve_file", relpath=relpath))
     
-    # Detect if this looks like a "day" directory containing article files (txt/md/html/image by slug)
     files = [c for c in p.iterdir() if c.is_file()]
     has_article_texts = any(c.suffix.lower() in (".txt", ".md") for c in files)
 
     if has_article_texts:
-        # Group by slug (stem without extension, ignoring '-1' style duplicates by keeping exact stem)
         by_slug = {}
         for f in files:
             stem = f.stem
@@ -108,12 +108,10 @@ def browse_dir(relpath):
 
         items = []
         for slug, fpaths in sorted(by_slug.items()):
-            # Build paths map
             paths = {}
             title = slug
             link = ""
 
-            # Prefer .txt to derive title/link; fallback to .md
             txt_file = next((fp for fp in fpaths if fp.suffix.lower() == ".txt"), None)
             md_file = next((fp for fp in fpaths if fp.suffix.lower() == ".md"), None)
             html_file = next((fp for fp in fpaths if fp.suffix.lower() == ".html"), None)
@@ -134,17 +132,14 @@ def browse_dir(relpath):
             if img_file:
                 paths["image"] = relstr(img_file)
 
-            # Parse caption to extract title and link
             src = txt_file or md_file
             if src and src.exists():
                 try:
                     content = src.read_text(encoding="utf-8", errors="ignore")
-                    # Title: first non-empty line
                     for line in content.splitlines():
                         if line.strip():
                             title = line.strip()
                             break
-                    # Link: first line that looks like a URL
                     for line in content.splitlines():
                         ls = line.strip()
                         if ls.startswith("http://") or ls.startswith("https://"):
@@ -162,7 +157,6 @@ def browse_dir(relpath):
                 "errors": [],
             })
 
-        # Try to detect target date from path (…/YYYY/MM/DD)
         try:
             relp = p.relative_to(BASE_OUT)
             parts = relp.parts
@@ -182,7 +176,6 @@ def browse_dir(relpath):
             count=len(items),
         )
 
-    # Default: show standard browser grid for non-article directories
     entries = []
     for c in sorted(p.iterdir()):
         sub = f"{relpath}/{c.name}"
