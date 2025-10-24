@@ -3,6 +3,27 @@ import re
 import html as ihtml
 from pathlib import Path
 from urllib.parse import urlsplit, unquote
+from collections import deque
+from time import time
+
+
+class RateLimiter:
+
+    def __init__(self, max_calls: int, window_seconds: int):
+        self.max_calls = max_calls
+        self.window = window_seconds
+        self._events: dict[str, deque[float]] = {}
+
+    def allow(self, key: str) -> bool:
+        now = time()
+        dq = self._events.setdefault(key, deque())
+        cutoff = now - self.window
+        while dq and dq[0] < cutoff:
+            dq.popleft()
+        if len(dq) >= self.max_calls:
+            return False
+        dq.append(now)
+        return True
 
 
 def slugify(s: str, maxlen: int = 80) -> str:
