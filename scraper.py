@@ -2,12 +2,10 @@ import re
 import requests
 from bs4 import BeautifulSoup
 
-
 def download_html(url: str, session: requests.Session) -> str:
     r = session.get(url, timeout=45)
     r.raise_for_status()
     return r.text
-
 
 def extract_article_text(html: str, url: str | None = None) -> str:
     soup = BeautifulSoup(html, "lxml")
