@@ -27,8 +27,8 @@ def run_job(*, feed: str, out_root: str | Path, target_date: date, max_items: in
                     if pub.tzinfo is None:
                         pub = pub.replace(tzinfo=ZoneInfo("UTC"))
                     pub_ist = pub.astimezone(IST)
-                    # Include all entries instead of filtering by exact date
-                    entries.append((pub_ist, e))
+                    if pub_ist.date() == target_date:
+                        entries.append((pub_ist, e))
             except Exception:
                 continue
 
