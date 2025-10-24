@@ -22,6 +22,7 @@ INDEX_TEMPLATE = """
     {% endwith %}
 
     <form method="post" action="{{ url_for('run') }}" class="grid grid-cols-1 gap-5 bg-neutral-900/60 p-5 rounded-2xl border border-neutral-800">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <label class="block">
           <span class="text-sm text-neutral-300">Feed URL</span>
